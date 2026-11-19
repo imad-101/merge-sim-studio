@@ -135,8 +135,9 @@ label .lab{display:flex;justify-content:space-between}
       </div>
       <label>Characters
           <select id="theme">
-            <option value="goofy" selected>Goofy gang</option>
-            <option value="cats">Cats</option>
+            <option value="photocats" selected>Funny cats (photos)</option>
+            <option value="goofy">Goofy gang</option>
+            <option value="cats">Cartoon cats</option>
             <option value="upload">My own images</option>
             <option value="fruit">Fruit emoji</option>
             <option value="custom">My own emoji</option>
@@ -161,13 +162,13 @@ label .lab{display:flex;justify-content:space-between}
     <section>
       <h2>Motion</h2>
       <label><span class="lab">Drop speed <output id="rateOut"></output></span>
-        <input type="range" id="rate" min="0.4" max="4" step="0.1" value="1.6">
+        <input type="range" id="rate" min="0.4" max="4" step="0.1" value="1.2">
       </label>
       <label><span class="lab">Gravity <output id="gravOut"></output></span>
-        <input type="range" id="grav" min="0.4" max="2" step="0.1" value="1">
+        <input type="range" id="grav" min="0.3" max="2" step="0.05" value="0.6">
       </label>
       <label><span class="lab">Bounciness <output id="bounceOut"></output></span>
-        <input type="range" id="bounce" min="0" max="0.8" step="0.05" value="0.25">
+        <input type="range" id="bounce" min="0" max="0.95" step="0.05" value="0.6">
       </label>
       <label class="inline"><input type="checkbox" id="auto" checked> Drop automatically</label>
       <label class="inline"><input type="checkbox" id="smart" checked> Aim at matching ones (jar only)</label>
@@ -183,9 +184,9 @@ label .lab{display:flex;justify-content:space-between}
       <div class="row">
         <label>Merge sound
           <select id="sound">
-            <option value="goofy" selected>Goofy mix</option>
+            <option value="meow" selected>Meows, deeper each level</option>
+            <option value="goofy">Goofy mix</option>
             <option value="mine">My own sounds</option>
-            <option value="meow">Meows</option>
             <option value="notes">Rising notes</option>
             <option value="pop">Pops</option>
             <option value="off">Silent</option>
@@ -198,6 +199,7 @@ label .lab{display:flex;justify-content:space-between}
       <label>Use your own sound clips (up to 12)
         <input type="file" id="sndFiles" accept="audio/*" multiple>
       </label>
+      <label class="inline"><input type="checkbox" id="deeper" checked> Play my sounds deeper as levels grow</label>
       <p class="note" id="sndNote">Built-in sounds are generated in the page. Your own clips play at random on each merge. Everything you hear is recorded into the video.</p>
     </section>
   </aside>
@@ -214,8 +216,8 @@ const FONT = '"Baloo 2","Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-se
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
 /* ---------- settings ---------- */
-const S = { theme:'goofy', shape:'flask', bg:'black', ratio:'9:16', caption:$('caption').value, handle:$('handle').value,
-  rate:1.6, gravity:1, bounce:.25, auto:true, smart:true, sound:'goofy', vol:.8 };
+const S = { theme:'photocats', shape:'flask', bg:'black', ratio:'9:16', caption:$('caption').value, handle:$('handle').value,
+  rate:1.2, gravity:.6, bounce:.6, auto:true, smart:true, sound:'meow', vol:.8, deeper:true };
 
 const BGS = {
   sunset:{top:'#FFE0A8', bot:'#FF8FA6', jar:'rgba(255,255,255,.34)', edge:'#fff', ink:'#4A1D3A', dot:'rgba(255,255,255,.28)'},
@@ -248,7 +250,7 @@ const L = {};
 let tiers = [];          // [{r, sprite, happy, color}]
 let bodies = [], parts = [], floats = [];
 let merges = 0, kings = 0, maxTier = 0, combo = 0, comboT = 0, shake = 0, glow = 0;
-let rings = [], userImgs = [], userBufs = [], voices = 0, lastGoof = -1;
+let presetImgs = null, rings = [], userImgs = [], userBufs = [], voices = 0, lastGoof = -1;
 let overT = 0, flushT = 0, floorOpen = false, banner = 0;
 let paused = false, silent = false, clock = 0;
 const drop = {x:540, tx:540, tier:0, t:.6, pop:1};
@@ -291,7 +293,8 @@ function buildTiers(){
     const r = (BASE_R[lo] + (BASE_R[hi]-BASE_R[lo])*(p-lo)) * L.scale;
     const t = {r, color:'#fff'};
     if (S.theme==='cats'){ t.color = CATS[i].fur; t.sprite = mk(r, g=>drawCat(g,r,CATS[i],false)); t.happy = mk(r, g=>drawCat(g,r,CATS[i],true)); }
-    else if (S.theme==='goofy'){ t.color = GOOF[i][0]; t.sprite = t.happy = mk(r, g=>drawGoof(g,r,i)); }
+    else if (S.theme==='photocats' && presetImgs){ t.color = ['#FFD166','#F4A261','#fff','#CDB4DB','#8ECAE6'][i%5]; t.sprite = t.happy = mk(r, g=>drawUser(g,r,{img:presetImgs[i], clip:true, crown:i===10})); }
+    else if (S.theme==='goofy' || S.theme==='photocats'){ t.color = GOOF[i][0]; t.sprite = t.happy = mk(r, g=>drawGoof(g,r,i)); }
     else if (S.theme==='upload'){ t.color = `hsl(${(i*40+30)%360} 90% 65%)`; t.sprite = t.happy = mk(r, g=>drawUser(g,r,userImgs[i])); }
     else if (emoji){ t.color = `hsl(${(i*33+20)%360} 90% 62%)`; t.sprite = t.happy = mk(r, g=>drawEmoji(g,r,emoji[i])); }
     else { t.color = `hsl(${(i*31+350)%360} 85% 58%)`; t.sprite = t.happy = mk(r, g=>drawBall(g,r,i)); }
@@ -432,6 +435,7 @@ function drawUser(g, r, u){
     const k = 2*r/Math.min(w,h);
     g.save(); g.beginPath(); g.arc(0,0,r-2,0,7); g.clip(); g.drawImage(im, -w*k/2, -h*k/2, w*k, h*k); g.restore();
     g.beginPath(); g.arc(0,0,r-2,0,7); g.lineWidth = Math.max(3, r*.07); g.strokeStyle = '#fff'; g.stroke();
+    if (u.crown){ g.save(); g.scale(r, r); crown(g); g.restore(); }
   } else { const k = 2.1*r/Math.max(w,h); g.drawImage(im, -w*k/2, -h*k/2, w*k, h*k); }
 }
 function drawEmoji(g, r, e){
@@ -468,16 +472,24 @@ const canPlay = () => AC && !silent && S.sound!=='off' && AC.state==='running';
 function env(g, t, a, peak, dur){
   g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(peak, t+a); g.gain.exponentialRampToValueAtTime(.0001, t+dur);
 }
-function meow(f0, dur, vol){
-  const t = AC.currentTime, o = AC.createOscillator(), g = AC.createGain();
+function meow(p, combo){              // p: 0 = smallest level, 1 = biggest. Bigger is lower, longer and growlier.
+  const t = AC.currentTime, f0 = (880 - 715*p) * (1 + Math.min(combo,6)*.03) * rand(.97,1.03), dur = .26 + .8*p, vol = .9, k = 1 - .4*p;
+  const o = AC.createOscillator(), g = AC.createGain(), mix = AC.createGain();
   o.type = 'sawtooth';
-  o.frequency.setValueAtTime(f0*.7, t); o.frequency.linearRampToValueAtTime(f0*1.22, t+dur*.35); o.frequency.exponentialRampToValueAtTime(f0*.72, t+dur);
+  o.frequency.setValueAtTime(f0*.7, t); o.frequency.linearRampToValueAtTime(f0*1.22, t+dur*.3); o.frequency.exponentialRampToValueAtTime(f0*.66, t+dur);
+  if (p > .3){ const l = AC.createOscillator(), lg = AC.createGain(); l.frequency.value = 5.5 + 16*p; lg.gain.value = f0*.05*p*2; l.connect(lg); lg.connect(o.frequency); l.start(t); l.stop(t+dur+.05); }
   const f1 = AC.createBiquadFilter(); f1.type = 'bandpass'; f1.Q.value = 4;
-  f1.frequency.setValueAtTime(480, t); f1.frequency.linearRampToValueAtTime(1350, t+dur*.4); f1.frequency.linearRampToValueAtTime(620, t+dur);
+  f1.frequency.setValueAtTime(480*k, t); f1.frequency.linearRampToValueAtTime(1350*k, t+dur*.4); f1.frequency.linearRampToValueAtTime(600*k, t+dur);
   const f2 = AC.createBiquadFilter(); f2.type = 'bandpass'; f2.Q.value = 6;
-  f2.frequency.setValueAtTime(2700, t); f2.frequency.linearRampToValueAtTime(1900, t+dur);
+  f2.frequency.setValueAtTime(2700*k, t); f2.frequency.linearRampToValueAtTime(1900*k, t+dur);
   const g2 = AC.createGain(); g2.gain.value = .5;
-  o.connect(f1); o.connect(f2); f1.connect(g); f2.connect(g2); g2.connect(g);
+  o.connect(f1); o.connect(f2); f1.connect(mix); f2.connect(g2); g2.connect(mix);
+  const ws = AC.createWaveShaper(), n = 256, curve = new Float32Array(n), drive = 1 + p*10;
+  for (let i=0;i<n;i++){ const x = i/(n-1)*2-1; curve[i] = Math.tanh(x*drive)/Math.tanh(drive); }
+  ws.curve = curve; mix.gain.value = 1 + p*2; mix.connect(ws); ws.connect(g);
+  if (p > .15){ const sub = AC.createOscillator(), sg = AC.createGain(); sub.type = 'sine';
+    sub.frequency.setValueAtTime(f0*.35, t); sub.frequency.linearRampToValueAtTime(f0*.61, t+dur*.3); sub.frequency.exponentialRampToValueAtTime(f0*.33, t+dur);
+    sg.gain.value = .9*p; sub.connect(sg); sg.connect(g); sub.start(t); sub.stop(t+dur+.05); }
   g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t+.04);
   g.gain.setValueAtTime(vol, t+dur*.6); g.gain.exponentialRampToValueAtTime(.0001, t+dur);
   g.connect(master); o.start(t); o.stop(t+dur+.05);
@@ -512,10 +524,10 @@ const GOOFS = [
   () => tone({f:[380,.28,1500], dur:.3, vol:.35}),                                             // whee
   () => tone({type:'sawtooth', f:[75,.3,48], dur:.32, vol:.5, trem:38, bp:400, lp:1, hold:1})   // raspberry
 ];
-function playBuf(buf){
+function playBuf(buf, rate){
   if (voices >= 3) return;
-  const s = AC.createBufferSource(), g = AC.createGain(), t = AC.currentTime, d = Math.min(buf.duration, 3.5);
-  s.buffer = buf; g.gain.setValueAtTime(.9, t); g.gain.setValueAtTime(.9, t + Math.max(0, d-.15)); g.gain.linearRampToValueAtTime(0, t+d);
+  const s = AC.createBufferSource(), g = AC.createGain(), t = AC.currentTime, d = Math.min(buf.duration/rate, 3.5);
+  s.buffer = buf; s.playbackRate.value = rate; g.gain.setValueAtTime(.9, t); g.gain.setValueAtTime(.9, t + Math.max(0, d-.15)); g.gain.linearRampToValueAtTime(0, t+d);
   s.connect(g); g.connect(master); voices++; s.onended = () => { voices--; }; s.start(t); s.stop(t+d+.02);
 }
 const PENTA = [0,2,4,7,9];
@@ -524,13 +536,13 @@ function sndMerge(tier, n, combo){
   if (!canPlay()) return;
   const now = AC.currentTime; if (now - lastSound < (S.sound==='mine' ? .12 : S.sound==='goofy' ? .07 : .035)) return; lastSound = now;
   const p = n>1 ? tier/(n-1) : 0;
-  if (S.sound==='mine'){ if (userBufs.length) playBuf(userBufs[Math.floor(Math.random()*userBufs.length)]); return; }
+  if (S.sound==='mine'){ if (userBufs.length) playBuf(userBufs[Math.floor(Math.random()*userBufs.length)], S.deeper ? 1.4 - .9*p : 1); return; }
   if (S.sound==='goofy'){
     let k; do { k = Math.floor(Math.random()*GOOFS.length); } while (k === lastGoof); lastGoof = k; GOOFS[k]();
     if (p > .55) tone({f:[120,.5,36], dur:.7, vol:.9});
     return;
   }
-  if (S.sound==='meow'){ meow((860 - 560*p) * (1 + Math.min(combo,6)*.035) * rand(.96,1.04), .22 + .42*p, .9); blip(900 - 500*p, .07, .18, 'sine', 300); }
+  if (S.sound==='meow'){ meow(p, combo); if (p > .6) tone({f:[110,.5,34], dur:.7, vol:.5 + p*.4}); }
   else if (S.sound==='notes'){ const f = noteHz(Math.min(tier + combo, 14)); blip(f, .55, .5, 'triangle'); blip(f*2, .25, .15, 'sine'); }
   else blip(720 - 420*p + combo*30, .14, .6, 'sine', 180 - 60*p);
 }
@@ -599,7 +611,7 @@ function physStep(h){
         a.x -= nx*c*ia; a.y -= ny*c*ia; b.x += nx*c*ib; b.y += ny*c*ib;
         const rvx = b.vx-a.vx, rvy = b.vy-a.vy, vn = rvx*nx + rvy*ny;
         if (vn < 0){
-          const e = vn < -140 ? S.bounce : 0, jn = -(1+e)*vn/is;
+          const e = vn < -45 ? S.bounce : 0, jn = -(1+e)*vn/is;
           a.vx -= jn*ia*nx; a.vy -= jn*ia*ny; b.vx += jn*ib*nx; b.vy += jn*ib*ny;
           const tx = -ny, ty = nx, vt = rvx*tx + rvy*ty, jt = clamp(-vt/is, -.25*jn, .25*jn);
           a.vx -= jt*ia*tx; a.vy -= jt*ia*ty; b.vx += jt*ib*tx; b.vy += jt*ib*ty;
@@ -618,7 +630,7 @@ function walls(b){
   if (!L.flask){
     if (b.x < L.left+b.r){ b.x = L.left+b.r; if (b.vx<0) b.vx = -b.vx*e; }
     if (b.x > L.right-b.r){ b.x = L.right-b.r; if (b.vx>0) b.vx = -b.vx*e; }
-    if (!floorOpen && b.y > L.floor-b.r){ b.y = L.floor-b.r; if (b.vy>0) b.vy = b.vy>160 ? -b.vy*e : 0; b.vx *= .985; }
+    if (!floorOpen && b.y > L.floor-b.r){ b.y = L.floor-b.r; if (b.vy>0) b.vy = b.vy>60 ? -b.vy*e : 0; b.vx *= .992; }
     return;
   }
   if (b.y < L.yJ){                                   // inside the neck
@@ -632,7 +644,7 @@ function walls(b){
   if (d > lim && d > 0 && !(dy<0 && Math.abs(dx)<L.nw) && !(floorOpen && dy>0)){
     const nx = dx/d, ny = dy/d; b.x = L.cx+nx*lim; b.y = L.cy+ny*lim;
     const vn = b.vx*nx + b.vy*ny;
-    if (vn > 0){ const k = (1 + (vn>160 ? e : 0))*vn; b.vx -= k*nx; b.vy -= k*ny; }
+    if (vn > 0){ const k = (1 + (vn>60 ? e : 0))*vn; b.vx -= k*nx; b.vy -= k*ny; }
     b.vx *= .999; b.vy *= .999;
   }
   for (const s of [-1,1]){                           // the two corners where neck meets bowl
@@ -649,13 +661,13 @@ function doMerge(a, b){
   rings.push({x, y, t:0, life:.75, R:a.r*3.2 + 60});
   if (last){
     kings++; shake = 26; burst(x, y, tiers[a.tier].color, 90, 1300); sndKing();
-    floats.push({x, y, text: S.theme==='cats' || S.theme==='goofy' ? 'ROYAL MERGE!' : 'MAX MERGE!', t:0, life:1.6, size:92});
+    floats.push({x, y, text: S.theme!=='balls' ? 'ROYAL MERGE!' : 'MAX MERGE!', t:0, life:1.6, size:92});
     return;
   }
   const t = a.tier+1, T = tiers[t];
   bodies.push({x, y, vx:(a.vx+b.vx)/2, vy:(a.vy+b.vy)/2 - 120, r:Math.max(a.r,b.r), r0:Math.max(a.r,b.r), r1:T.r, grow:0, tier:t,
     ang:(a.ang+b.ang)/2, av:0, age:0, happy:.9, pop:1, dead:false});
-  if (t > maxTier){ maxTier = t; if (t >= 5) floats.push({x:W/2, y:L.lineY+90, text: t===n-1 ? (S.theme==='cats' ? 'KING CAT!' : S.theme==='goofy' ? 'THE KING!' : 'MAX LEVEL!') : 'NEW LEVEL ' + (t+1) + '!', t:0, life:1.5, size: t===n-1 ? 110 : 76}); }
+  if (t > maxTier){ maxTier = t; if (t >= 5) floats.push({x:W/2, y:L.lineY+90, text: t===n-1 ? (S.theme==='cats' || S.theme==='photocats' ? 'KING CAT!' : S.theme==='goofy' ? 'THE KING!' : 'MAX LEVEL!') : 'NEW LEVEL ' + (t+1) + '!', t:0, life:1.5, size: t===n-1 ? 110 : 76}); }
   burst(x, y, T.color, 8 + t*3, 380 + t*60);
   if (t >= 6) shake = Math.max(shake, 4 + t*1.6);
   if (combo >= 3) floats.push({x, y:y - T.r - 20, text:'x' + combo, t:0, life:.8, size:54 + Math.min(combo,8)*5});
@@ -782,7 +794,7 @@ function draw(){
     const k = f.t/f.life, s = f.size * (k<.15 ? .6 + k/.15*.5 : 1.1 - Math.min(.1, (k-.15)*.5));
     outlined(f.text, clamp(f.x, 200, W-200), f.y, s, '#FFE45C', B.ink, k>.7 ? (1-k)/.3 : 1);
   }
-  if (banner>0) outlined(S.theme==='cats' ? 'TOO MANY CATS!' : 'TOO FULL!', W/2, midY, 96, '#fff', '#F0355F', Math.min(1, banner*2));
+  if (banner>0) outlined(S.theme==='cats' || S.theme==='photocats' ? 'TOO MANY CATS!' : 'TOO FULL!', W/2, midY, 96, '#fff', '#F0355F', Math.min(1, banner*2));
 
   // evolution strip
   const n = tiers.length, slot = Math.min(84, 920/n), sw = slot*n + 28, sx = W/2 - sw/2;
@@ -914,6 +926,7 @@ bind('grav','input', e => { S.gravity = +e.target.value; outs(); });
 bind('bounce','input', e => { S.bounce = +e.target.value; outs(); });
 bind('vol','input', e => { S.vol = +e.target.value; if (master) master.gain.value = S.vol; outs(); });
 bind('sound','change', e => { S.sound = e.target.value; if (S.sound==='mine' && !userBufs.length) $('sndNote').textContent = 'Choose your sound files below first.'; });
+bind('deeper','change', e => { S.deeper = e.target.checked; });
 bind('auto','change', e => { S.auto = e.target.checked; });
 bind('smart','change', e => { S.smart = e.target.checked; });
 bind('pauseBtn','click', e => { paused = !paused; e.target.textContent = paused ? 'Resume' : 'Pause'; });
@@ -928,6 +941,9 @@ cv.addEventListener('pointerdown', e => {
 
 /* ---------- start ---------- */
 layout(); buildTiers(); reset(); outs();
+Promise.all(Array.from({length:11}, (_, i) => new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = 'cat-' + String(i+1).padStart(2,'0') + '.jpg'; })))
+  .then(imgs => { presetImgs = imgs; if (S.theme==='photocats') buildTiers(); })
+  .catch(() => { const o = $('theme').querySelector('option[value="photocats"]'); if (o) o.textContent = 'Funny cats (photos missing)'; });
 silent = true; for (let i=0;i<420;i++) update(1/60); silent = false;   // open with a jar already in play
 if (document.fonts && document.fonts.load) document.fonts.load(`800 40px "Baloo 2"`).then(() => { if (S.theme==='balls') buildTiers(); }).catch(()=>{});
 requestAnimationFrame(frame);
